@@ -5,3 +5,7 @@ scratch/
 .env
 __pycache__/
 *.log
+ 
+scraper_user_data/
+*.html
+
