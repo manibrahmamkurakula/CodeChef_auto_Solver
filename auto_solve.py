@@ -60,8 +60,16 @@ async def auto_solve_generalized():
 
         # STEP 1: Open Course Page & Verify Auth
         print(f"\n[1/3] Navigating to course page...", flush=True)
-        await page.goto(COURSE_URL)
-        await asyncio.sleep(4)
+        try:
+            await page.goto(COURSE_URL, wait_until="domcontentloaded")
+        except Exception as nav_err:
+            print(f"Notice during navigation: {nav_err}. Retrying...", flush=True)
+            await asyncio.sleep(2)
+            try:
+                await page.goto(COURSE_URL, wait_until="domcontentloaded")
+            except Exception:
+                pass
+        await asyncio.sleep(3)
 
         page_text = await page.evaluate("document.body.innerText")
         if "403" in page_text or "You are not authorised" in page_text or "login" in page.url.lower():
