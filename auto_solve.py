@@ -165,46 +165,24 @@ async def auto_solve_generalized():
                     await go_to_next_question(page)
                     continue
 
-                # Solution retrieval: Gemini AI -> Explained Solutions fallback
+                # Solution retrieval: Check Submissions first -> Ask Gemini fallback if no submissions
                 solution_sql = ""
-                for attempt in range(1, 4):
-                    print(f"  [Attempt #{attempt}/3] Requesting solution query...", flush=True)
 
-                    # 1. Ask Gemini AI widget
-                    gemini_btn = page.locator("button:has-text('Ask Gemini'), [class*='gemini'], [class*='AskGemini'], button:has-text('Gemini'), button:has-text('Ask AI')").first
-                    chat_box = page.locator("textarea[placeholder*='Gemini'], textarea[placeholder*='Ask'], input[placeholder*='Gemini'], [contenteditable='true'], [class*='chat-input']").first
+                # --- STEP A: Check Submissions Tab First ---
+                print("  --> Checking Submissions tab for existing solutions...", flush=True)
+                sub_tab = page.locator("button:has-text('Submissions'), [role='tab']:has-text('Submissions'), div:has-text('Submissions')").first
+                sol_ids = []
 
-                    if (await gemini_btn.count() > 0 and await gemini_btn.is_visible()) or (await chat_box.count() > 0 and await chat_box.is_visible()):
-                        print("  --> [GEMINI AI] Sending prompt to Ask Gemini...", flush=True)
-                        if await gemini_btn.count() > 0 and await gemini_btn.is_visible():
-                            await gemini_btn.click(force=True)
-                            await asyncio.sleep(2)
+                if await sub_tab.count() > 0 and await sub_tab.is_visible():
+                    try:
+                        await sub_tab.click(force=True)
+                        await asyncio.sleep(2.5)
 
-                        if await chat_box.count() > 0 and await chat_box.is_visible():
-                            await chat_box.click(force=True)
-                            await chat_box.fill("Write only the exact SQL query code solution for this problem without explanations.")
-                            await page.keyboard.press("Enter")
-                            await asyncio.sleep(6)
+                        pane_text = await page.evaluate("document.body.innerText")
+                        sol_ids = re.findall(r'\b1\d{9}\b', pane_text)
 
-                        solution_sql = await page.evaluate("""() => {
-                            let blocks = Array.from(document.querySelectorAll('.gemini-response pre, .ai-response pre, pre code, [class*="code-block"], pre'));
-                            if (blocks.length > 0) {
-                                let t = blocks[blocks.length - 1].innerText.trim();
-                                return t.replace(/^```sql/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
-                            }
-                            return '';
-                        }""")
-
-                    # 2. Explained Solutions fallback
-                    if not solution_sql:
-                        sub_tab = page.get_by_text("Submissions", exact=True)
-                        if await sub_tab.count() > 0:
-                            await sub_tab.click(force=True)
-                            await asyncio.sleep(3)
-
-                            pane_text = await page.evaluate("document.body.innerText")
-                            sol_ids = re.findall(r'\b1\d{9}\b', pane_text)
-                            
+                        if sol_ids:
+                            print(f"  --> Found {len(sol_ids)} submission(s). Extracting code...", flush=True)
                             for sol_id in sol_ids[:2]:
                                 sol_url = f"https://www.codechef.com/viewsolution/{sol_id}"
                                 try:
@@ -212,56 +190,128 @@ async def auto_solve_generalized():
                                     await asyncio.sleep(2)
                                     text = await page.evaluate("document.body.innerText")
                                     title = await page.title()
-                                    
-                                    if "403" in title or "Access denied" in text or "403" in text[:300]:
-                                        print(f"  [403 Restricted on {sol_id}] Requesting via Gemini AI widget...", flush=True)
-                                        await page.goto(current_url)
-                                        await asyncio.sleep(3)
-                                        
-                                        gemini_btn = page.locator("button:has-text('Ask Gemini'), [class*='gemini'], [class*='AskGemini']").first
-                                        chat_box = page.locator("textarea[placeholder*='Gemini'], textarea[placeholder*='Ask'], input[placeholder*='Gemini'], [contenteditable='true']").first
 
-                                        if await gemini_btn.count() > 0 and await gemini_btn.is_visible():
-                                            await gemini_btn.click(force=True)
-                                            await asyncio.sleep(2)
-                                        if await chat_box.count() > 0 and await chat_box.is_visible():
-                                            await chat_box.click(force=True)
-                                            await chat_box.fill("Write the exact SQL query code solution for this problem. Return only the SQL code.")
-                                            await page.keyboard.press("Enter")
-                                            await asyncio.sleep(6)
-
-                                        solution_sql = await page.evaluate("""() => {
-                                            let blocks = Array.from(document.querySelectorAll('.gemini-response pre, .ai-response pre, pre code, [class*="code-block"], pre'));
-                                            if (blocks.length > 0) {
-                                                let t = blocks[blocks.length - 1].innerText.trim();
-                                                return t.replace(/^```sql/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
-                                            }
-                                            return '';
-                                        }""")
-                                        if solution_sql:
-                                            break
-                                    elif "Language: SQL" in text:
-                                        part = text.split("Language: SQL")[1].split("Explanation")[0].split("Subtask Info")[0]
-                                        lines = [l.strip() for l in part.splitlines() if l.strip() and not l.strip().isdigit()]
-                                        solution_sql = "\n".join(lines).strip()
-                                        if "Help others understand" in solution_sql:
-                                            solution_sql = solution_sql.split("Help others understand")[0].strip()
-                                        if "Popular explanations" in solution_sql:
-                                            solution_sql = solution_sql.split("Popular explanations")[0].strip()
-                                        if solution_sql:
-                                            break
-                                except Exception:
-                                    pass
+                                    if "403" not in title and "Access denied" not in text and "403" not in text[:300]:
+                                        if "Language: SQL" in text:
+                                            part = text.split("Language: SQL")[1].split("Explanation")[0].split("Subtask Info")[0]
+                                            lines_sql = [l.strip() for l in part.splitlines() if l.strip() and not l.strip().isdigit()]
+                                            solution_sql = "\n".join(lines_sql).strip()
+                                            if "Help others understand" in solution_sql:
+                                                solution_sql = solution_sql.split("Help others understand")[0].strip()
+                                            if "Popular explanations" in solution_sql:
+                                                solution_sql = solution_sql.split("Popular explanations")[0].strip()
+                                            if solution_sql:
+                                                break
+                                except Exception as err:
+                                    print(f"  Notice while fetching submission {sol_id}: {err}", flush=True)
 
                             if page.url != current_url:
                                 await page.goto(current_url)
-                                await asyncio.sleep(3)
+                                await asyncio.sleep(2.5)
+                        else:
+                            print("  --> No valid submission IDs found in Submissions tab.", flush=True)
+                    except Exception as sub_err:
+                        print(f"  Notice checking submissions: {sub_err}", flush=True)
+                        if page.url != current_url:
+                            await page.goto(current_url)
+                            await asyncio.sleep(2)
 
+                # Return to problem / statement view if needed
+                stmt_tab = page.locator("button:has-text('Statement'), [role='tab']:has-text('Statement'), div:has-text('Problem')").first
+                if await stmt_tab.count() > 0 and await stmt_tab.is_visible():
+                    try:
+                        await stmt_tab.click(force=True)
+                        await asyncio.sleep(1)
+                    except Exception:
+                        pass
+
+                # --- STEP B: Fallback to Ask Gemini (Top Left) if No Submissions ---
+                if not solution_sql:
+                    print("  --> [NO SUBMISSIONS] Triggering 'Ask Gemini' at top left...", flush=True)
+
+                    # Look for Ask Gemini button (especially at top left / header / sidebar)
+                    gemini_btn = page.locator(
+                        "button:has-text('Ask Gemini'), "
+                        "[aria-label*='Gemini'], "
+                        "[class*='gemini'], "
+                        "[class*='AskGemini'], "
+                        "header button:has-text('Gemini'), "
+                        "nav button:has-text('Gemini'), "
+                        "button:has-text('Ask AI')"
+                    ).first
+
+                    chat_box = page.locator(
+                        "textarea[placeholder*='Gemini'], "
+                        "textarea[placeholder*='Ask'], "
+                        "input[placeholder*='Gemini'], "
+                        "[contenteditable='true'], "
+                        "[class*='chat-input'], "
+                        ".gemini-input"
+                    ).first
+
+                    # 1. Click Ask Gemini button at top left
+                    if await gemini_btn.count() > 0 and await gemini_btn.is_visible():
+                        print("  --> Clicking 'Ask Gemini' button at top left...", flush=True)
+                        await gemini_btn.click(force=True)
+                        await asyncio.sleep(2)
+
+                    # 2. Type 'answer' into the Gemini chat box
+                    if await chat_box.count() > 0 and await chat_box.is_visible():
+                        print("  --> Typing 'answer' into Ask Gemini chat box...", flush=True)
+                        await chat_box.click(force=True)
+                        await chat_box.fill("answer")
+                        await asyncio.sleep(0.5)
+                        await page.keyboard.press("Enter")
+                        print("  --> Waiting for Gemini response...", flush=True)
+                        await asyncio.sleep(6)
+
+                    # 3. Copy the answer from Gemini response
+                    copy_btn = page.locator(
+                        "button[title*='Copy'], "
+                        "button:has-text('Copy'), "
+                        "[class*='copy-code'], "
+                        ".gemini-response button, "
+                        ".ai-response button"
+                    ).last
+
+                    copied_via_btn = False
+                    if await copy_btn.count() > 0 and await copy_btn.is_visible():
+                        try:
+                            print("  --> Clicking Copy button on Gemini response...", flush=True)
+                            await copy_btn.click(force=True)
+                            await asyncio.sleep(1)
+                            try:
+                                solution_sql = await page.evaluate("() => navigator.clipboard.readText()")
+                                if solution_sql and len(solution_sql.strip()) > 2:
+                                    copied_via_btn = True
+                                    print("  --> Copied code from clipboard successfully.", flush=True)
+                            except Exception:
+                                pass
+                        except Exception as copy_err:
+                            print(f"  Notice clicking copy button: {copy_err}", flush=True)
+
+                    if not copied_via_btn or not solution_sql:
+                        print("  --> Extracting code directly from Gemini response block...", flush=True)
+                        solution_sql = await page.evaluate("""() => {
+                            let blocks = Array.from(document.querySelectorAll('.gemini-response pre, .ai-response pre, pre code, [class*="code-block"], pre'));
+                            if (blocks.length > 0) {
+                                let t = blocks[blocks.length - 1].innerText.trim();
+                                return t.replace(/^```sql/i, '').replace(/^```python/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
+                            }
+                            let msgs = Array.from(document.querySelectorAll('.gemini-response, [class*="bot-message"], [class*="ai-message"]'));
+                            if (msgs.length > 0) {
+                                return msgs[msgs.length - 1].innerText.trim();
+                            }
+                            return '';
+                        }""")
+
+                    # Clean markdown wrappers if present
                     if solution_sql:
-                        print(f"  [SOLUTION ACQUIRED]:\n{solution_sql}", flush=True)
-                        break
-                    
-                    await asyncio.sleep(2)
+                        solution_sql = re.sub(r'^```[a-zA-Z]*\n?', '', solution_sql.strip())
+                        solution_sql = re.sub(r'\n?```$', '', solution_sql.strip())
+
+                if solution_sql:
+                    print(f"  [SOLUTION ACQUIRED]:\n{solution_sql}", flush=True)
 
                 # Paste solution and submit
                 if solution_sql and len(solution_sql.strip()) > 5:
