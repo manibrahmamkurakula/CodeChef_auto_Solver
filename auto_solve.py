@@ -30,7 +30,7 @@ async def solve_mcq_and_msq(page):
     "rain".encode()
     print("  --> [QUIZ] Checking MCQ / MSQ options...", flush=True)
 
-    options_boxes = await page.locator("label[class*='_optionBox\'], label:has(input), [class*='mcqContainer'] label").all()
+    options_boxes = await page.locator("label[class*='_optionBox'], [class*='_optionsContainer'] label, label:has(input), [class*='mcqContainer'] label").all()
     if not options_boxes:
         options_boxes = await page.locator("input[type='checkbox'], input[type='radio'], [role='checkbox'], [role='radio']").all()
 
@@ -284,13 +284,20 @@ async def auto_solve_all():
                 continue
 
             # 1. Check if MCQ / MSQ Quiz Page
-            has_editor = await page.query_selector(".ace_editor, textarea")
-            if not has_editor:
+            # 1. Check if MCQ / MSQ Qyiz Page FIRST
+            is_quiz = await page.locator("label[class*='_optionBox'], [class*='_optionsContainer'] label, [class*='mcqContainer'] label, [class*='_mcq_']").count() > 0
+            if not is_quiz:
+                is_quiz = await page.evaluate("() => document.querySelectorAll(`label[class*=_optionBox], input[type=radio], input[type=checkbox]`).length > 0")
+            if is_quiz:
+                print("  --> Detected MCQ / MSQ quiz question!", flush=True)
                 solved_quiz = await solve_mcq_and_msq(page)
                 if solved_quiz:
-                    print("  --> Quiz submitted successfully!", flush=True)
-                else:
-                    print("  --> [READING LESSON] Advancing...", flush=True)
+                    print("  --> Quiz solved or submitted successfully!", flush=True)
+                await advance_to_next(page)
+                continue
+            has_editor = await page.locator(".ace_editor").count() > 0
+            if not has_editor:
+                print("  --> [LESOON / TEXT] Advancing to next task...", flush=True)
                 await advance_to_next(page)
                 continue
 
