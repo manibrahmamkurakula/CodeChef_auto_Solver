@@ -54,7 +54,7 @@ async def solve_mcq_and_msq(page):
                     await sub_btn.click(force=True)
                     await asyncio.sleep(1.5)
 
-                success = await page.evaluate("() => { let n = Array.from(document.querySelectorAll('button, a')).find(b => b.innerText && b.innerText.trim() === 'Next'); return n ? !n.disabled && !n.className.includes('disabled') : false; }")
+                success = await page.evaluate("() => { let n = Array.from(document.querySelectorAll('button, a')).find(b => b.innerText && b.innerText.trim() === 'Next'); let w = (document.body.innerText || '').toLowerCase().includes('wrong answer'); if (w) return false; return (document.body.innerText || '').toLowerCase().includes('correct'); }")
                 if success:
                     print(f"    --> [SUCCESS] MCQ solved with Option {idx + 1}!", flush=True)
                     return True
@@ -84,7 +84,7 @@ async def solve_mcq_and_msq(page):
                 await sub_btn.click(force=True)
                 await asyncio.sleep(1.5)
 
-            success = await page.evaluate("() => { let n1 = Array.from(document.querySelectorAll('button, a')).find(b => b.innerText && b.innerText.trim() === 'Next'); return n1 ? !n1.disabled && !n1.className.includes('disabled') : false; }")
+            success = await page.evaluate("() => { let n1 = Array.from(document.querySelectorAll('button, a')).find(b => b.innerText && b.innerText.trim() === 'Next'); let w = (document.body.innerText || '').toLowerCase().includes('wrong answer'); if (w) return false; return (document.body.innerText || '').toLowerCase().includes('correct'); }")
             if success:
                 print(f"    --> [SUCCESS] MSQ solved with Combo {[x + 1 for x in combo]}!", flush=True)
                 return True
