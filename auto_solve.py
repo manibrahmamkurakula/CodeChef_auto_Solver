@@ -285,6 +285,10 @@ async def auto_solve_all():
 
             # 1. Check if MCQ / MSQ Quiz Page
             # 1. Check if MCQ / MSQ Qyiz Page FIRST
+            if chr(47) + chr(112) + chr(114) + chr(111) + chr(98) + chr(108) + chr(101) + chr(109) + chr(115) + chr(47) not in current_url:
+                print(chr(32)*2 + chr(45) + chr(45) + chr(62) + chr(32) + chr(80) + chr(108) + chr(101) + chr(97) + chr(115) + chr(101) + chr(32) + chr(108) + chr(111) + chr(103) + chr(32) + chr(105) + chr(110) + chr(32) + chr(111) + chr(110) + chr(32) + chr(98) + chr(114) + chr(111) + chr(119) + chr(115) + chr(101) + chr(114) + chr(32) + chr(97) + chr(110) + chr(100) + chr(32) + chr(99) + chr(108) + chr(105) + chr(99) + chr(107) + chr(32) + chr(82) + chr(101) + chr(115) + chr(117) + chr(109) + chr(101) + chr(33), flush=True)
+                await asyncio.sleep(4)
+                continue
             is_quiz = await page.locator("label[class*='_optionBox'], [class*='_optionsContainer'] label, [class*='mcqContainer'] label, [class*='_mcq_']").count() > 0
             if not is_quiz:
                 is_quiz = await page.evaluate("() => document.querySelectorAll(`label[class*=_optionBox], input[type=radio], input[type=checkbox]`).length > 0")
