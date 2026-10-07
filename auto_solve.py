@@ -242,8 +242,7 @@ async def auto_solve_all():
 
         context = await p.chromium.launch_persistent_context(
             user_data_dir=USER_DATA_DIR,
-            channel="chrome",
-            headless=False,
+                        headless=False,
             permissions=["clipboard-read", "clipboard-write"],
             args=["--start-maximized", "--disable-blink-features=AutomationControlled"]
         )
